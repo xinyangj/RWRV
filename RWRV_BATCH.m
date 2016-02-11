@@ -59,88 +59,88 @@ clear
 close
 clc
 format compact
+matlabpool 2
 
-sequence_path = 'D:\Documents\Projects\Libraries\RWRV_pcode_ver1.0\MCL_dataset\Sequence';
-saliency_path = 'D:\Documents\Projects\Libraries\RWRV_pcode_ver1.0\MCL_dataset\Saliency';
+sequence_path = 'D:\Documents\Projects\Libraries\RWRV\MCL_dataset\Sequence\';
+saliency_path = 'D:\Documents\Projects\Libraries\RWRV\MCL_dataset\Saliency\';
+ext = 'png';
 
-file_name_list = dir(sequence_path);
-file_name_list = file_name_list(file_name_list.is_dir);
-total_cnt = size(file_name_list);
-start_frm_num_list= [               1                1 ];
-stop_frm_num_list = [               100               100 ];
-run_condition     = [               0                1 ];
+video_list = dir(sequence_path);
+video_list = video_list([video_list.isdir]);
+video_list = video_list(3:end);
+total_cnt = size(video_list, 1);
 
 
-for j=1:total_cnt
-    
-    if run_condition(j) == 1
+
+parfor j=1:total_cnt
+    start_frm_num = 1;
+    frame_list = dir([sequence_path, video_list(j).name, '/*.' ,ext]);
+    stop_frm_num = size(frame_list, 1);
+           
+    video_name = char(video_list(j).name);
+       
+    mkdir(strcat(saliency_path,'\',video_name));
+      
+    for i=start_frm_num:stop_frm_num
+            
+        i
+        ifile_cur = strcat(sequence_path,'\',video_name,'\',frame_list(i).name);
+            
+        if i>start_frm_num
+            ifile_ref_p = strcat(sequence_path,'\',video_name,'\',frame_list(i).name);
+            if  i~=stop_frm_num
+                ifile_ref_n = strcat(sequence_path,'\',video_name,'\',frame_list(i).name);
+            end
+        end
+            
+        uiImg_c = imread(ifile_cur);
+        [iSizeH, iSizeW] = size(uiImg_c);
+        iSizeW = iSizeW/3;
+            
+        % For checking name
+        [in_path, in_name, in_ext] = fileparts(ifile_cur);
+        if i>start_frm_num
+            [in_path, in_name_rp, in_ext_r] = fileparts(ifile_ref_p);
+            if  i~=stop_frm_num
+                [in_path, in_name_rn, in_ext_r] = fileparts(ifile_ref_n);
+            end
+        end
+            
+        % Initialization
+        intra_flag = 0;
+        is_last = 0;
         
-        file_name=char(file_name_list(j));
-        start_frm_num =start_frm_num_list(j);
-        stop_frm_num = stop_frm_num_list(j);
+        % First frame only , You can also set after detecting 'Scene Change'
+        if i==start_frm_num
+            intra_flag = 1;
+        end
         
-        mkdir(strcat(saliency_path,'\',file_name));
-        
-        for i=start_frm_num:stop_frm_num
+        out_path = strcat(saliency_path,'\',video_name,'\');
+        if intra_flag==1
             
-            i
-            ifile_cur = strcat(sequence_path,'\',file_name,'\',file_name,num2str(i  ,'_%04d'),'.png');
+            % Spatial Saliency Detection
+            uiOut2 = RWRV_S(in_path,in_name, in_ext);
             
-            if i>start_frm_num
-                ifile_ref_p = strcat(sequence_path,'\',file_name,'\',file_name,num2str(i-1  ,'_%04d'),'.png');
-                if  i~=stop_frm_num
-                    ifile_ref_n = strcat(sequence_path,'\',file_name,'\',file_name,num2str(i+1  ,'_%04d'),'.png');
-                end
+            sfile2 = strcat(out_path,in_name, '_sal',in_ext);
+            uiOut = imresize(uiOut2, [iSizeH iSizeW], 'bicubic');
+            imwrite(uiOut, sfile2);
+        else
+                
+            if i==stop_frm_num
+                is_last=1;
             end
-            
-            uiImg_c = imread(ifile_cur);
-            [iSizeH, iSizeW] = size(uiImg_c);
-            iSizeW = iSizeW/3;
-            
-            % For checking name
-            [in_path, in_name, in_ext] = fileparts(ifile_cur);
-            if i>start_frm_num
-                [in_path, in_name_rp, in_ext_r] = fileparts(ifile_ref_p);
-                if  i~=stop_frm_num
-                    [in_path, in_name_rn, in_ext_r] = fileparts(ifile_ref_n);
-                end
-            end
-            
-            % Initialization
-            intra_flag = 0;
-            is_last = 0;
-            
-            % First frame only , You can also set after detecting 'Scene Change'
-            if i==start_frm_num
-                intra_flag = 1;
-            end
-            
-            out_path = strcat(saliency_path,'\',file_name,'\');
-            if intra_flag==1
+               
+            % Spatiotemporal Saliency Detection
+            [uiOut1, uiSal] = RWRV_ST(in_path,out_path,video_name,i,in_ext,uiOut2,is_last);
                 
-                % Spatial Saliency Detection
-                uiOut2 = RWRV_S(in_path,in_name, in_ext);
+            % Back up saliency map for the next frame
+            uiOut2 = uiOut1;
                 
-                sfile2 = strcat(out_path,in_name, '_sal',in_ext);
-                uiOut = imresize(uiOut2, [iSizeH iSizeW], 'bicubic');
-                imwrite(uiOut, sfile2);
-            else
+            sfile1 = strcat(out_path,in_name, '_sal',in_ext);
+            uiOut_sal = imresize(uiOut1, [iSizeH iSizeW], 'bicubic');
+            imwrite(uiOut_sal, sfile1);
                 
-                if i==stop_frm_num
-                    is_last=1;
-                end
-                
-                % Spatiotemporal Saliency Detection
-                [uiOut1, uiSal] = RWRV_ST(in_path,out_path,file_name,i,in_ext,uiOut2,is_last);
-                
-                % Back up saliency map for the next frame
-                uiOut2 = uiOut1;
-                
-                sfile1 = strcat(out_path,in_name, '_sal',in_ext);
-                uiOut_sal = imresize(uiOut1, [iSizeH iSizeW], 'bicubic');
-                imwrite(uiOut_sal, sfile1);
-                
-            end
         end
     end
 end
+matlabpool close
